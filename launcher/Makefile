@@ -40,7 +40,8 @@ include $(DEVKITPRO)/libnx/switch_rules
 TARGET		:=	PhonePadNX
 APP_TITLE := PhonePadNX
 APP_AUTHOR := byrilo
-APP_VERSION := 0.1.0
+ICON := icon.jpg
+APP_VERSION := 0.1.1
 BUILD		:=	build
 SOURCES		:=	source ../vendor
 DATA		:=	data
