@@ -3,6 +3,7 @@
 #include <stdio.h>
 #include <string.h>
 #include <stdlib.h>
+#include <errno.h>
 #ifdef _WIN32
 #include <winsock2.h>
 #include <ws2tcpip.h>
@@ -15,6 +16,7 @@ typedef SOCKET Socket;
 #include <arpa/inet.h>
 #include <unistd.h>
 #include <fcntl.h>
+#include <netinet/tcp.h>
 typedef int Socket;
 #define CLOSE close
 #define INVALID (-1)
@@ -37,6 +39,18 @@ static void respond(Client *c,int code,const char *type,const char *body) {
         "HTTP/1.1 %d Result\r\nContent-Type: %s\r\nContent-Length: %zu\r\n"
         "Cache-Control: no-store\r\nConnection: close\r\nX-Content-Type-Options: nosniff\r\n"
         "Referrer-Policy: no-referrer\r\n\r\n",code,type,c->plen);
+    // Send small API responses in one write; do not split headers from "OK".
+    if(c->hlen+c->plen<sizeof(c->header)) {
+        memcpy(c->header+c->hlen,body,c->plen);
+        c->hlen+=c->plen; c->plen=0;
+    }
+}
+static bool would_block(void) {
+#ifdef _WIN32
+    int error=WSAGetLastError(); return error==WSAEWOULDBLOCK||error==WSAEINTR;
+#else
+    return errno==EAGAIN||errno==EWOULDBLOCK||errno==EINTR;
+#endif
 }
 static bool authorized_header(const char *request) {
     const char *p=strstr(request,"\r\n");
@@ -84,7 +98,7 @@ int phonepad_run(PadSession *session,unsigned port) {
     if(bind(listener,(struct sockaddr*)&addr,sizeof(addr))||listen(listener,8)) { CLOSE(listener); return 3; }
     nonblock(listener);
     Client clients[8]={0}; for(int i=0;i<8;i++) clients[i].fd=INVALID;
-    for(;;) {
+    while(platform_running()) {
         uint64_t now=platform_ms();
         if(pad_expire(session,now)) platform_apply(&session->state);
         platform_tick();
@@ -102,7 +116,10 @@ int phonepad_run(PadSession *session,unsigned port) {
             if(fd!=INVALID) {
                 int slot=-1; for(int i=0;i<8;i++) if(clients[i].fd==INVALID) { slot=i; break; }
                 if(slot<0) CLOSE(fd);
-                else { nonblock(fd); clients[slot]=(Client){.fd=fd,.started=now}; }
+                else {
+                    setsockopt(fd,IPPROTO_TCP,TCP_NODELAY,(const char*)&yes,sizeof(yes));
+                    nonblock(fd); clients[slot]=(Client){.fd=fd,.started=now};
+                }
             }
         }
         for(int i=0;i<8;i++) {
@@ -110,10 +127,12 @@ int phonepad_run(PadSession *session,unsigned port) {
             if(!c->writing && FD_ISSET(c->fd,&reads)) {
                 if(c->draining) {
                     char discard[2048]; int n=recv(c->fd,discard,sizeof(discard),0);
+                    if(n<0&&would_block()) continue;
                     if(n<=0) { CLOSE(c->fd); c->fd=INVALID; }
                     continue;
                 }
                 int n=recv(c->fd,c->input+c->used,(int)(sizeof(c->input)-c->used-1),0);
+                if(n<0&&would_block()) continue;
                 if(n<=0) { CLOSE(c->fd); c->fd=INVALID; continue; }
                 c->used+=(size_t)n; c->input[c->used]=0;
                 if(strstr(c->input,"\r\n\r\n")) route(c,session);
@@ -124,6 +143,7 @@ int phonepad_run(PadSession *session,unsigned port) {
                 if(c->sent<c->hlen) { p=c->header+c->sent; left=c->hlen-c->sent; }
                 else { p=c->payload+c->sent-c->hlen; left=c->plen-(c->sent-c->hlen); }
                 int n=send(c->fd,p,(int)left,0);
+                if(n<0&&would_block()) continue;
                 if(n>0) c->sent+=(size_t)n;
                 if(n<=0) { CLOSE(c->fd); c->fd=INVALID; }
                 else if(c->sent==c->hlen+c->plen) {
@@ -140,4 +160,7 @@ int phonepad_run(PadSession *session,unsigned port) {
             }
         }
     }
+    for(int i=0;i<8;i++) if(clients[i].fd!=INVALID) CLOSE(clients[i].fd);
+    CLOSE(listener);
+    return 0;
 }

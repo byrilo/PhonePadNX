@@ -1,3 +1,4 @@
+#error "Legacy sysmodule withdrawn after console reboots. Do not build or install."
 #include <switch.h>
 #include <stdio.h>
 #include <stdlib.h>

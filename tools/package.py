@@ -1,21 +1,18 @@
 from pathlib import Path
-import shutil
+import os
+import subprocess
 import zipfile
 
 root = Path(__file__).resolve().parents[1]
-sd = root / 'dist/SD'
-module = sd / 'atmosphere/contents/4200000000505044'
-app = sd / 'switch/PhonePadNX'
-for p in [module / 'flags', app]:
-    p.mkdir(parents=True, exist_ok=True)
-shutil.copy2(root / 'sysmodule/phonepad-sys.nsp', module / 'exefs.nsp')
-shutil.copy2(root / 'launcher/PhonePadNX.nro', app / 'PhonePadNX.nro')
-(module / 'flags/boot2.flag').touch()
-(module / 'toolbox.json').write_text('{"name":"PhonePadNX","tid":"4200000000505044","requires_reboot":true}\n')
-shutil.copy2(root / 'README.md', root / 'dist/README.md')
-with zipfile.ZipFile(root / 'dist/PhonePadNX-0.1.1-test.zip', 'w', zipfile.ZIP_DEFLATED) as z:
-    for path in sorted(sd.rglob('*')):
-        if path.is_file():
-            z.write(path, path.relative_to(sd))
+# Refuse to package code that still calls the retired virtual-controller backend.
+compiler_root = Path(os.environ['DEVKITPRO']) / 'devkitA64/bin'
+symbols = subprocess.check_output([str(compiler_root / 'aarch64-none-elf-nm'), str(root / 'launcher/PhonePadNX-check.elf')], text=True)
+for name in ['hiddbgInitialize', 'hiddbgAttachHdlsWorkBuffer', 'hiddbgAttachHdlsVirtualDevice', 'hiddbgSetHdlsState']:
+    if name in symbols:
+        raise SystemExit('Refusing diagnostic package with virtual input: ' + name)
+output = root / 'dist/PhonePadNX-0.2.0-diagnostic.zip' 
+output.parent.mkdir(parents=True, exist_ok=True)
+with zipfile.ZipFile(output, 'w', zipfile.ZIP_DEFLATED) as z:
+    z.write(root / 'launcher/PhonePadNX-check.nro', 'switch/PhonePadNX-check/PhonePadNX-check.nro')
     z.write(root / 'README.md', 'README.md')
-print('Created dist/PhonePadNX-0.1.1-test.zip')
+print('Created', output.name)

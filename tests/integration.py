@@ -44,6 +44,10 @@ try:
     assert (root/'simulator-state.txt').read_text() == '0 0 0 0 0'
     assert call('/', 'GET')[0] == 200
     stalled.close()
+    # Sustained input at the actual client cadence, after the lost-packet test.
+    for sequence in range(2,82):
+        assert call(f'/api/state?id={owner}&seq={sequence}&b=0&lx=0&ly=0&rx=0&ry=0')[0] == 200
+        time.sleep(.025)
     assert call('/'*2100,'GET')[0] == 413
     print('HTTP integration passed: page, auth, ownership, input, replay, slow client, watchdog, oversized request.')
 finally:

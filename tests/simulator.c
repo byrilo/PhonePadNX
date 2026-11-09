@@ -16,6 +16,7 @@ bool platform_apply(const PhonePadState *s) {
     return true;
 }
 void platform_tick(void) {}
+bool platform_running(void) { return true; }
 int main(void) {
     PadSession session; pad_init(&session,"123456");
     puts("SIMULATOR ONLY: http://127.0.0.1:8080/?pin=123456 (no Switch input)");

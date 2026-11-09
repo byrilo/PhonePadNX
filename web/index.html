@@ -13,20 +13,37 @@
  <div class="side"><div class="cross face"><button class="up" data-bit="2">X</button><button class="left" data-bit="3">Y</button><button class="right" data-bit="0">A</button><button class="down" data-bit="1">B</button></div><div class="stick" data-stick="r"><div class="thumb"></div></div></div>
 </main>
 <div class="center"><button data-bit="11">−</button><button data-bit="4">L3</button><button id="stop">Стоп</button><button data-bit="5">R3</button><button data-bit="10">+</button></div>
-<footer>Одна Wi-Fi сеть · Для назначения игрока нажми L + R · Удобнее горизонтально</footer>
-<div id="setup"><div class="card"><h1>Телефон → Switch</h1><p>Введи PIN из PhonePadNX на консоли. После подключения закрой приложение на Switch и запусти игру.</p><input id="pin" aria-label="PIN" inputmode="numeric" pattern="[0-9]{6}" maxlength="6" placeholder="000000"><button id="connect">Подключиться</button><p id="message" role="status"></p></div></div>
+<footer>Проверка связи · Кнопки видны на Switch · Управление играми отключено</footer>
+<div id="setup"><div class="card"><h1>Телефон → Switch</h1><p>Введи PIN из PhonePadNX на консоли. Это проверка связи: держи PhonePadNX Check открытым на Switch. Кнопки будут показаны на его экране.</p><input id="pin" aria-label="PIN" inputmode="numeric" pattern="[0-9]{6}" maxlength="6" placeholder="000000"><button id="connect">Подключиться</button><p id="message" role="status"></p></div></div>
 <script>
 'use strict';
 const $=id=>document.getElementById(id), active=new Map(), sticks={l:[0,0],r:[0,0]};
-let connected=false, busy=false, sequence=0, pulses=0, controller=null;
+let connected=false, busy=false, sequence=0, pulses=0, controller=null, lostSince=0, nextTry=0, generation=0;
 const id=Array.from(crypto.getRandomValues(new Uint8Array(16)),v=>v.toString(16).padStart(2,'0')).join('');
 $('pin').value=new URLSearchParams(location.search).get('pin')||'';
 history.replaceState(null,'',location.pathname);
 function buttons(){let b=0;for(const bit of active.values())b|=1<<bit;return b;}
 function clear(){active.clear();pulses=0;for(const side of ['l','r'])sticks[side]=[0,0];document.querySelectorAll('.active').forEach(e=>e.classList.remove('active'));document.querySelectorAll('.thumb').forEach(e=>e.style.transform='');}
 function offline(message){connected=false;clear();$('setup').hidden=false;$('message').textContent=message;$('status').textContent='Не подключён';}
-async function request(path){const abort=new AbortController();controller=abort;const timer=setTimeout(()=>abort.abort(),300);try{return await fetch(path,{method:'POST',headers:{'X-PhonePad':'1'},signal:abort.signal,cache:'no-store'});}finally{clearTimeout(timer);controller=null;}}
-$('connect').onclick=async()=>{if(busy)return;if(!/^\d{6}$/.test($('pin').value)){$('message').textContent='Нужно шесть цифр.';return;}busy=true;$('message').textContent='Подключение…';try{const r=await request(`/api/claim?id=${id}&pin=${$('pin').value}`);if(!r.ok)throw Error(r.status===409?'Контроллер занят другим телефоном.':r.status===403?'Неверный PIN.':r.status===503?'Системный модуль не смог подключить контроллер.':'Подключение отклонено. Попробуй ещё раз.');clear();connected=true;$('setup').hidden=true;$('status').textContent='Подключён';}catch(e){$('message').textContent=e.name==='AbortError'?'Switch не отвечает.':e.message;}finally{busy=false;}};
+async function request(path){
+ const abort=new AbortController();controller=abort;
+ const timer=setTimeout(()=>abort.abort(),1500);
+ try{const r=await fetch(path,{method:'POST',headers:{'X-PhonePad':'1'},signal:abort.signal,cache:'no-store'});const body=await r.text();return {ok:r.ok,status:r.status,body};}
+ finally{clearTimeout(timer);if(controller===abort)controller=null;}
+}
+function failure(r){return r.status===409?'Контроллер занят или пакет устарел.':r.status===403?'Неверный PIN или сессия завершилась.':r.status===429?'Подожди секунду и повтори.':r.status===503?'Ошибка обработки ввода на Switch.':`Switch ответил HTTP ${r.status}.`;}
+async function claim(){const r=await request(`/api/claim?id=${id}&pin=${$('pin').value}`);if(!r.ok)throw Error(failure(r));}
+async function sendState(b,lx,ly,rx,ry){return request(`/api/state?id=${id}&seq=${sequence++>>>0}&b=${b}&lx=${lx}&ly=${ly}&rx=${rx}&ry=${ry}`);}
+$('connect').onclick=async()=>{
+ if(busy)return;
+ if(!/^\d{6}$/.test($('pin').value)){$('message').textContent='Нужно шесть цифр.';return;}
+ busy=true;const attempt=++generation;$('message').textContent='Проверка подключения…';
+ try{await claim();const r=await sendState(0,0,0,0,0);if(!r.ok)throw Error(failure(r));
+  if(attempt!==generation||document.hidden)return;
+  clear();connected=true;lostSince=0;nextTry=0;$('setup').hidden=true;$('status').textContent='Связь проверена';
+ }catch(e){if(attempt===generation)$('message').textContent=e.name==='AbortError'||e instanceof TypeError?'Нет ответа от Switch. Проверь Wi-Fi и оставь приложение открытым.':e.message;}
+ finally{busy=false;}
+};
 document.querySelectorAll('[data-bit]').forEach(el=>{
  el.addEventListener('pointerdown',e=>{e.preventDefault();if(!connected)return;el.setPointerCapture(e.pointerId);const bit=Number(el.dataset.bit);active.set(e.pointerId,bit);pulses|=1<<bit;el.classList.add('active');});
  const release=e=>{active.delete(e.pointerId);if(![...active.values()].includes(Number(el.dataset.bit)))el.classList.remove('active');};
@@ -39,10 +56,30 @@ document.querySelectorAll('[data-stick]').forEach(el=>{
  const release=e=>{if(owner!==e.pointerId)return;owner=null;sticks[side]=[0,0];el.firstElementChild.style.transform='';};
  for(const event of ['pointerup','pointercancel','lostpointercapture'])el.addEventListener(event,release);
 });
-async function pump(){if(!connected||busy)return;busy=true;const started=performance.now(),heldPulses=pulses,b=buttons()|pulses;const [lx,ly]=sticks.l,[rx,ry]=sticks.r;try{const r=await request(`/api/state?id=${id}&seq=${sequence++>>>0}&b=${b}&lx=${lx}&ly=${ly}&rx=${rx}&ry=${ry}`);if(!r.ok)throw Error();pulses&=~heldPulses;$('status').textContent=`Подключён · ${Math.round(performance.now()-started)} мс`;}catch{offline('Связь прервана. Нажми «Подключиться».');}finally{busy=false;}}
+async function pump(){
+ if(!connected||busy||performance.now()<nextTry)return;
+ busy=true;const started=performance.now(),heldPulses=pulses,attempt=generation;
+ const b=lostSince?0:buttons()|pulses,[lx,ly]=lostSince?[0,0]:sticks.l,[rx,ry]=lostSince?[0,0]:sticks.r;
+ try{let r=await sendState(b,lx,ly,rx,ry);
+  if(r.status===403){await claim();r=await sendState(0,0,0,0,0);}
+  if(!r.ok)throw Error(failure(r));
+  if(attempt!==generation)return;
+  pulses&=~heldPulses;lostSince=0;$('status').textContent=`Подключён · ${Math.round(performance.now()-started)} мс`;
+ }catch(e){
+  if(attempt!==generation)return;
+  clear();if(!lostSince)lostSince=started;
+  nextTry=performance.now()+150;
+  $('status').textContent='Восстанавливаю связь…';
+  if(performance.now()-lostSince>2500)offline(e.name==='AbortError'||e instanceof TypeError?'Switch не отвечает. Проверь Wi-Fi и повтори подключение.':e.message);
+ }finally{busy=false;}
+}
 setInterval(pump,25);
-$('stop').onclick=()=>{clear();pump();offline('Управление остановлено.');};
-for(const event of ['blur','pagehide'])window.addEventListener(event,()=>{clear();connected=false;if(controller)controller.abort();offline('Нажми «Подключиться», чтобы продолжить.');});
-document.addEventListener('visibilitychange',()=>{if(document.hidden){clear();connected=false;offline('Нажми «Подключиться», чтобы продолжить.');}});
+function stop(message){generation++;if(controller)controller.abort();offline(message);}
+$('stop').onclick=()=>stop('Управление остановлено.');
+// Mobile keyboards and browser chrome can blur the window without hiding the page.
+// Release inputs, but keep the authenticated connection.
+window.addEventListener('blur',clear);
+window.addEventListener('pagehide',()=>stop('Нажми «Подключиться», чтобы продолжить.'));
+document.addEventListener('visibilitychange',()=>{if(document.hidden)stop('Нажми «Подключиться», чтобы продолжить.');});
 window.addEventListener('contextmenu',e=>e.preventDefault());
 </script></html>
