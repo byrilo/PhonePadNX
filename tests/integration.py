@@ -1,5 +1,6 @@
 """Run from the repository root after compiling tests/simulator.c."""
 import http.client
+import sys
 from pathlib import Path
 import subprocess
 import time
@@ -7,7 +8,7 @@ import urllib.request
 import urllib.error
 
 root = Path(__file__).resolve().parents[1]
-proc = subprocess.Popen([str(root / 'tests/simulator.exe')], cwd=root, stdout=subprocess.DEVNULL)
+proc = subprocess.Popen([str(root / ('tests/simulator.exe' if sys.platform == 'win32' else 'tests/simulator'))], cwd=root, stdout=subprocess.DEVNULL)
 base = 'http://127.0.0.1:8080'
 owner = '0123456789abcdef0123456789abcdef'
 def call(path, method='POST', header=True):

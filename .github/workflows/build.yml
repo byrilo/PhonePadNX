@@ -2,7 +2,7 @@ name: Build PhonePadNX
 on:
   workflow_dispatch:
   push:
-    paths: ['common/**', 'sysmodule/**', 'launcher/**', 'vendor/**', 'web/**', 'tools/**', '.github/workflows/**']
+    paths: ['common/**', 'sysmodule/**', 'launcher/**', 'vendor/**', 'web/**', 'tools/**', 'tests/**', '.github/workflows/**']
 permissions:
   contents: read
 jobs:
@@ -11,8 +11,16 @@ jobs:
     container: devkitpro/devkita64:latest
     steps:
       - uses: actions/checkout@v4
+      - name: Test input protocol
+        run: |
+          gcc -std=c11 -Wall -Wextra -Werror -Icommon common/pad.c tests/test_core.c -o /tmp/test-core
+          /tmp/test-core
       - name: Embed phone interface
         run: python3 tools/embed.py
+      - name: Test HTTP server
+        run: |
+          gcc -std=c11 -D_POSIX_C_SOURCE=200809L -Wall -Wextra -Werror -Icommon common/pad.c common/server.c tests/simulator.c -o tests/simulator
+          python3 tests/integration.py
       - name: Build background module
         run: make -C sysmodule -j2
       - name: Build launcher
@@ -22,4 +30,4 @@ jobs:
       - uses: actions/upload-artifact@v4
         with:
           name: PhonePadNX-experimental
-          path: dist/PhonePadNX-0.1-experimental.zip
+          path: dist/PhonePadNX-0.1.0-test.zip

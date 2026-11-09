@@ -10,3 +10,6 @@ dist/
 *.map
 __pycache__/
 simulator-state.txt
+
+tests/simulator
+common/web_page.h

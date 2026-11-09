@@ -13,9 +13,9 @@ shutil.copy2(root / 'launcher/PhonePadNX.nro', app / 'PhonePadNX.nro')
 (module / 'flags/boot2.flag').touch()
 (module / 'toolbox.json').write_text('{"name":"PhonePadNX","tid":"4200000000505044","requires_reboot":true}\n')
 shutil.copy2(root / 'README.md', root / 'dist/README.md')
-with zipfile.ZipFile(root / 'dist/PhonePadNX-0.1-experimental.zip', 'w', zipfile.ZIP_DEFLATED) as z:
+with zipfile.ZipFile(root / 'dist/PhonePadNX-0.1.0-test.zip', 'w', zipfile.ZIP_DEFLATED) as z:
     for path in sorted(sd.rglob('*')):
         if path.is_file():
             z.write(path, path.relative_to(sd))
     z.write(root / 'README.md', 'README.md')
-print('Created dist/PhonePadNX-0.1-experimental.zip')
+print('Created dist/PhonePadNX-0.1.0-test.zip')
