@@ -1,0 +1,48 @@
+<!doctype html>
+<html lang="ru"><meta charset="utf-8">
+<meta name="viewport" content="width=device-width,initial-scale=1,maximum-scale=1,user-scalable=no,viewport-fit=cover">
+<meta name="referrer" content="no-referrer">
+<title>PhonePadNX</title>
+<style>
+:root{color-scheme:dark;font-family:system-ui,sans-serif;background:#10151d;color:#eef4ff}*{box-sizing:border-box;-webkit-user-select:none;user-select:none;-webkit-touch-callout:none}body{margin:0;padding:12px max(14px,env(safe-area-inset-right)) 12px max(14px,env(safe-area-inset-left));touch-action:none;overflow:hidden}header{display:flex;justify-content:space-between;align-items:center;height:38px}header b{letter-spacing:.08em}#status{font-size:12px;color:#93a7bd}button,input{font:inherit}button{border:1px solid #3b4d66;color:#e9f1ff;background:#253246;border-radius:14px;touch-action:none;box-shadow:0 4px #090e16}button.active{background:#6ce0cb;color:#10201d;transform:translateY(3px);box-shadow:none}#setup{position:fixed;inset:0;background:#10151df5;z-index:10;display:grid;place-items:center}#setup[hidden]{display:none}.card{width:min(90vw,400px);padding:28px;border:1px solid #35445b;border-radius:24px;background:#182231}.card h1{margin:0 0 12px}.card p{color:#a8b7cb;line-height:1.5}.card input{user-select:text;width:100%;padding:12px;border:1px solid #4a5e7a;background:#10151d;border-radius:12px;color:white;font-size:24px;text-align:center;letter-spacing:.3em}.card button{width:100%;padding:14px;margin-top:16px;background:#6ce0cb;color:#10201d;font-weight:bold}#message{font-size:13px;min-height:20px}.shoulders{display:flex;gap:10px;margin:12px 0}.shoulders button{height:44px;flex:1}.layout{display:grid;grid-template-columns:1fr 1fr;gap:25px}.side{display:flex;align-items:center;justify-content:space-around;gap:14px}.stick{width:126px;height:126px;background:#182331;border:2px solid #3c506b;border-radius:50%;position:relative;touch-action:none;flex-shrink:0}.thumb{position:absolute;width:56px;height:56px;left:33px;top:33px;background:#46617c;border:2px solid #8095ae;border-radius:50%;pointer-events:none}.cross{display:grid;grid-template-columns:repeat(3,44px);grid-template-rows:repeat(3,44px);gap:3px}.cross button{font-size:19px}.up{grid-area:1/2}.left{grid-area:2/1}.right{grid-area:2/3}.down{grid-area:3/2}.center{display:flex;gap:12px;justify-content:center;margin-top:18px}.center button{padding:10px 19px}footer{text-align:center;color:#8195ac;font-size:11px;margin-top:15px}#stop{color:#ffa8a8}.face button{border-radius:50%}.face .up{color:#79bbff}.face .left{color:#ffdb72}.face .right{color:#ff8c9c}.face .down{color:#7de2ac}@media(orientation:portrait){.layout{grid-template-columns:1fr;gap:28px}.side{justify-content:space-evenly}footer{font-size:12px}}@media(max-height:360px) and (orientation:landscape){header{height:22px}.shoulders{margin:6px 0}.shoulders button{height:32px}.center{margin-top:8px}.center button{padding:7px 16px}footer{margin-top:6px}}
+</style>
+<header><b>PHONEPAD<span style="color:#6ce0cb">NX</span></b><span id="status">Не подключён</span></header>
+<div class="shoulders"><button data-bit="8">ZL</button><button data-bit="6">L</button><button data-bit="7">R</button><button data-bit="9">ZR</button></div>
+<main class="layout">
+ <div class="side"><div class="stick" data-stick="l"><div class="thumb"></div></div><div class="cross"><button class="up" data-bit="13">▲</button><button class="left" data-bit="12">◀</button><button class="right" data-bit="14">▶</button><button class="down" data-bit="15">▼</button></div></div>
+ <div class="side"><div class="cross face"><button class="up" data-bit="2">X</button><button class="left" data-bit="3">Y</button><button class="right" data-bit="0">A</button><button class="down" data-bit="1">B</button></div><div class="stick" data-stick="r"><div class="thumb"></div></div></div>
+</main>
+<div class="center"><button data-bit="11">−</button><button data-bit="4">L3</button><button id="stop">Стоп</button><button data-bit="5">R3</button><button data-bit="10">+</button></div>
+<footer>Одна Wi-Fi сеть · Для назначения игрока нажми L + R · Удобнее горизонтально</footer>
+<div id="setup"><div class="card"><h1>Телефон → Switch</h1><p>Введи PIN из PhonePadNX на консоли. После подключения закрой приложение на Switch и запусти игру.</p><input id="pin" aria-label="PIN" inputmode="numeric" pattern="[0-9]{6}" maxlength="6" placeholder="000000"><button id="connect">Подключиться</button><p id="message" role="status"></p></div></div>
+<script>
+'use strict';
+const $=id=>document.getElementById(id), active=new Map(), sticks={l:[0,0],r:[0,0]};
+let connected=false, busy=false, sequence=0, pulses=0, controller=null;
+const id=Array.from(crypto.getRandomValues(new Uint8Array(16)),v=>v.toString(16).padStart(2,'0')).join('');
+$('pin').value=new URLSearchParams(location.search).get('pin')||'';
+history.replaceState(null,'',location.pathname);
+function buttons(){let b=0;for(const bit of active.values())b|=1<<bit;return b;}
+function clear(){active.clear();pulses=0;for(const side of ['l','r'])sticks[side]=[0,0];document.querySelectorAll('.active').forEach(e=>e.classList.remove('active'));document.querySelectorAll('.thumb').forEach(e=>e.style.transform='');}
+function offline(message){connected=false;clear();$('setup').hidden=false;$('message').textContent=message;$('status').textContent='Не подключён';}
+async function request(path){const abort=new AbortController();controller=abort;const timer=setTimeout(()=>abort.abort(),300);try{return await fetch(path,{method:'POST',headers:{'X-PhonePad':'1'},signal:abort.signal,cache:'no-store'});}finally{clearTimeout(timer);controller=null;}}
+$('connect').onclick=async()=>{if(busy)return;if(!/^\d{6}$/.test($('pin').value)){$('message').textContent='Нужно шесть цифр.';return;}busy=true;$('message').textContent='Подключение…';try{const r=await request(`/api/claim?id=${id}&pin=${$('pin').value}`);if(!r.ok)throw Error(r.status===409?'Контроллер занят другим телефоном.':r.status===403?'Неверный PIN.':r.status===503?'Системный модуль не смог подключить контроллер.':'Подключение отклонено. Попробуй ещё раз.');clear();connected=true;$('setup').hidden=true;$('status').textContent='Подключён';}catch(e){$('message').textContent=e.name==='AbortError'?'Switch не отвечает.':e.message;}finally{busy=false;}};
+document.querySelectorAll('[data-bit]').forEach(el=>{
+ el.addEventListener('pointerdown',e=>{e.preventDefault();if(!connected)return;el.setPointerCapture(e.pointerId);const bit=Number(el.dataset.bit);active.set(e.pointerId,bit);pulses|=1<<bit;el.classList.add('active');});
+ const release=e=>{active.delete(e.pointerId);if(![...active.values()].includes(Number(el.dataset.bit)))el.classList.remove('active');};
+ el.addEventListener('pointerup',release);el.addEventListener('pointercancel',release);el.addEventListener('lostpointercapture',release);
+});
+document.querySelectorAll('[data-stick]').forEach(el=>{
+ let owner=null;const side=el.dataset.stick;
+ const move=e=>{if(owner!==e.pointerId)return;const r=el.getBoundingClientRect(),radius=r.width/2-22;let x=(e.clientX-r.left-r.width/2)/radius,y=(e.clientY-r.top-r.height/2)/radius;const len=Math.hypot(x,y);if(len>1){x/=len;y/=len;}if(len<.12)x=y=0;sticks[side]=[Math.round(x*32767),Math.round(-y*32767)];el.firstElementChild.style.transform=`translate(${x*radius}px,${y*radius}px)`;};
+ el.addEventListener('pointerdown',e=>{e.preventDefault();if(!connected||owner!==null)return;owner=e.pointerId;el.setPointerCapture(owner);move(e);});el.addEventListener('pointermove',move);
+ const release=e=>{if(owner!==e.pointerId)return;owner=null;sticks[side]=[0,0];el.firstElementChild.style.transform='';};
+ for(const event of ['pointerup','pointercancel','lostpointercapture'])el.addEventListener(event,release);
+});
+async function pump(){if(!connected||busy)return;busy=true;const started=performance.now(),heldPulses=pulses,b=buttons()|pulses;const [lx,ly]=sticks.l,[rx,ry]=sticks.r;try{const r=await request(`/api/state?id=${id}&seq=${sequence++>>>0}&b=${b}&lx=${lx}&ly=${ly}&rx=${rx}&ry=${ry}`);if(!r.ok)throw Error();pulses&=~heldPulses;$('status').textContent=`Подключён · ${Math.round(performance.now()-started)} мс`;}catch{offline('Связь прервана. Нажми «Подключиться».');}finally{busy=false;}}
+setInterval(pump,25);
+$('stop').onclick=()=>{clear();pump();offline('Управление остановлено.');};
+for(const event of ['blur','pagehide'])window.addEventListener(event,()=>{clear();connected=false;if(controller)controller.abort();offline('Нажми «Подключиться», чтобы продолжить.');});
+document.addEventListener('visibilitychange',()=>{if(document.hidden){clear();connected=false;offline('Нажми «Подключиться», чтобы продолжить.');}});
+window.addEventListener('contextmenu',e=>e.preventDefault());
+</script></html>

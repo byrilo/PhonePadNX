@@ -1,0 +1,12 @@
+build/
+dist/
+*.exe
+*.elf
+*.nso
+*.nsp
+*.nro
+*.nacp
+*.npdm
+*.map
+__pycache__/
+simulator-state.txt
