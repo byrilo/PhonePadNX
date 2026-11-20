@@ -43,7 +43,7 @@ int main(void) {
         struct in_addr address={.s_addr=ip};
         char url[128];
         snprintf(url,sizeof(url),"http://%s:%u/?pin=%s",inet_ntoa(address),port,pin);
-        printf("\x1b[2J\x1b[1;2HPhonePadNX 0.3.3 test");
+        printf("\x1b[2J\x1b[1;2HPhonePadNX 0.3.3");
         if (ip && pin[0] && result==0) {
             printf("\x1b[2;2H%s",url);
             draw_qr(url);
