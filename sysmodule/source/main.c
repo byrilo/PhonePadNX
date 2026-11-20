@@ -1,9 +1,9 @@
-#error "Legacy sysmodule withdrawn after console reboots. Do not build or install."
 #include <switch.h>
 #include <stdio.h>
 #include <stdlib.h>
 #include <string.h>
 #include <sys/stat.h>
+#include <unistd.h>
 #include "pad.h"
 
 u32 __nx_applet_type=AppletType_None;
@@ -12,11 +12,14 @@ static PadSession session;
 static HiddbgHdlsHandle handle;
 static HiddbgHdlsSessionId hdls;
 static bool attached, hdls_ready, dbg_ready;
+static bool listening;
+static uint64_t deadline, next_stop_check;
 static Result last_result=0xffffffff;
 static unsigned char work_buffer[0x1000] __attribute__((aligned(0x1000)));
 
 void __libnx_initheap(void) {
-    static unsigned char heap[0x800000];
+    // Keep the background module's heap bounded on Horizon 23.x.
+    static unsigned char heap[0x100000] __attribute__((aligned(0x1000)));
     extern void *fake_heap_start,*fake_heap_end;
     fake_heap_start=heap; fake_heap_end=heap+sizeof(heap);
 }
@@ -70,8 +73,19 @@ bool platform_apply(const PhonePadState *s) {
 done:
     status(rc); return R_SUCCEEDED(rc);
 }
+bool platform_running(void) {
+    uint64_t now=platform_ms();
+    if (!listening || now>=deadline) return false;
+    if (now<next_stop_check) return true;
+    next_stop_check=now+150;
+    return access("sdmc:/config/phonepad/stop",F_OK)!=0;
+}
 void platform_tick(void) {
     if(attached&&!session.owner[0]) { hiddbgDetachHdlsVirtualDevice(handle); attached=false; }
+    if(!session.owner[0] && hdls_ready) {
+        hiddbgReleaseHdlsWorkBuffer(hdls);
+        hdls_ready=false; hiddbgExit(); dbg_ready=false;
+    }
 }
 int main(void) {
     mkdir("sdmc:/config",0777); mkdir("sdmc:/config/phonepad",0777);
@@ -90,10 +104,26 @@ int main(void) {
     config.tcp_tx_buf_max_size=config.tcp_rx_buf_max_size=0;
     config.sb_efficiency=2; config.num_bsd_sessions=1;
     Result rc;
-    while(R_FAILED(rc=socketInitialize(&config))) { status(rc); svcSleepThread(1000000000); }
+
+    unlink("sdmc:/config/phonepad/start");
     status(0);
-    for(;;) {
-        int err=phonepad_run(&session,8080);
-        status(0xf0000000u+(unsigned)err); svcSleepThread(1000000000);
+    for (;;) {
+        if (unlink("sdmc:/config/phonepad/start")==0) {
+            unlink("sdmc:/config/phonepad/stop");
+            pad_init(&session,pin);
+            deadline=platform_ms()+30*60*1000;
+            rc=socketInitialize(&config);
+            if (R_FAILED(rc)) { status(rc); continue; }
+            status(0);
+            next_stop_check=0;
+            listening=true;
+            int err=phonepad_run(&session,8080);
+            listening=false;
+            socketExit();
+            pad_init(&session,pin);
+            platform_tick();
+            status(err ? 0xf0000000u+(unsigned)err : 0);
+        }
+        svcSleepThread(100000000);
     }
 }

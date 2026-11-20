@@ -37,13 +37,13 @@ include $(DEVKITPRO)/libnx/switch_rules
 #   of a homebrew executable (.nro). This is intended to be used for sysmodules.
 #   NACP building is skipped as well.
 #---------------------------------------------------------------------------------
-TARGET		:=	PhonePadNX-check
-APP_TITLE := PhonePadNX Check
+TARGET		:=	PhonePadNX
+APP_TITLE := PhonePadNX
 APP_AUTHOR := byrilo
 ICON := icon.jpg
-APP_VERSION := 0.2.0
+APP_VERSION := 0.3.0
 BUILD		:=	build
-SOURCES		:=	source ../vendor ../common
+SOURCES		:=	source ../vendor
 DATA		:=	data
 INCLUDES	:=	include ../common ../vendor
 #ROMFS	:=	romfs

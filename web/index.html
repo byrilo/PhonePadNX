@@ -13,8 +13,8 @@
  <div class="side"><div class="cross face"><button class="up" data-bit="2">X</button><button class="left" data-bit="3">Y</button><button class="right" data-bit="0">A</button><button class="down" data-bit="1">B</button></div><div class="stick" data-stick="r"><div class="thumb"></div></div></div>
 </main>
 <div class="center"><button data-bit="11">−</button><button data-bit="4">L3</button><button id="stop">Стоп</button><button data-bit="5">R3</button><button data-bit="10">+</button></div>
-<footer>Проверка связи · Кнопки видны на Switch · Управление играми отключено</footer>
-<div id="setup"><div class="card"><h1>Телефон → Switch</h1><p>Введи PIN из PhonePadNX на консоли. Это проверка связи: держи PhonePadNX Check открытым на Switch. Кнопки будут показаны на его экране.</p><input id="pin" aria-label="PIN" inputmode="numeric" pattern="[0-9]{6}" maxlength="6" placeholder="000000"><button id="connect">Подключиться</button><p id="message" role="status"></p></div></div>
+<footer>Одна Wi-Fi сеть · L + R для выбора игрока</footer>
+<div id="setup"><div class="card"><h1>Телефон → Switch</h1><p>Введи PIN из PhonePadNX на консоли. После подключения выйди из PhonePadNX на Switch и запусти игру.</p><input id="pin" aria-label="PIN" inputmode="numeric" pattern="[0-9]{6}" maxlength="6" placeholder="000000"><button id="connect">Подключиться</button><p id="message" role="status"></p></div></div>
 <script>
 'use strict';
 const $=id=>document.getElementById(id), active=new Map(), sticks={l:[0,0],r:[0,0]};
