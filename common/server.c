@@ -24,7 +24,7 @@ typedef int Socket;
 
 typedef struct {
     Socket fd; char input[2048], header[512]; size_t used, sent, hlen, plen;
-    const char *payload; uint64_t started; bool writing,draining;
+    const char *payload; uint64_t started; bool writing,draining,keep_alive;
 } Client;
 static void nonblock(Socket fd) {
 #ifdef _WIN32
@@ -37,8 +37,8 @@ static void respond(Client *c,int code,const char *type,const char *body) {
     c->plen=strlen(body); c->payload=body; c->sent=0; c->writing=true;
     c->hlen=(size_t)snprintf(c->header,sizeof(c->header),
         "HTTP/1.1 %d Result\r\nContent-Type: %s\r\nContent-Length: %zu\r\n"
-        "Cache-Control: no-store\r\nConnection: close\r\nX-Content-Type-Options: nosniff\r\n"
-        "Referrer-Policy: no-referrer\r\n\r\n",code,type,c->plen);
+        "Cache-Control: no-store\r\nConnection: %s\r\nX-Content-Type-Options: nosniff\r\n"
+        "Referrer-Policy: no-referrer\r\n\r\n",code,type,c->plen,c->keep_alive?"keep-alive":"close");
     // Send small API responses in one write; do not split headers from "OK".
     if(c->hlen+c->plen<sizeof(c->header)) {
         memcpy(c->header+c->hlen,body,c->plen);
@@ -70,6 +70,34 @@ static bool authorized_header(const char *request) {
     }
     return false;
 }
+// Reuse only explicitly opted-in, bodyless API requests.
+static bool reusable_request(const Client *c) {
+    const char *end=strstr(c->input,"\r\n\r\n");
+    if (!end || (size_t)(end+4-c->input)!=c->used) return false;
+    const char *line=strstr(c->input,"\r\n")+2;
+    bool requested=false;
+    while (line<end) {
+        const char *stop=strstr(line,"\r\n");
+        const char *colon=memchr(line,':',(size_t)(stop-line));
+        if (!colon) return false;
+        char key[32];
+        size_t length=(size_t)(colon-line);
+        if (length>=sizeof(key)) return false;
+        for (size_t i=0;i<length;i++) {
+            char ch=line[i];
+            key[i]=ch>='A'&&ch<='Z'?(char)(ch+32):ch;
+        }
+        key[length]=0;
+        const char *value=colon+1;
+        while (value<stop && (*value==' '||*value=='\t')) value++;
+        if (!strcmp(key,"transfer-encoding")) return false;
+        if (!strcmp(key,"content-length") && (stop-value!=1 || *value!='0')) return false;
+        if (!strcmp(key,"connection") && (stop-value!=10 || strncmp(value,"keep-alive",10))) return false;
+        if (!strcmp(key,"x-phonepad-keepalive")) requested=stop-value==1&&*value=='1';
+        line=stop+2;
+    }
+    return requested;
+}
 static void route(Client *c,PadSession *session) {
     char method[8],path[1200],version[16];
     if(sscanf(c->input,"%7s %1199s %15s",method,path,version)!=3) {
@@ -83,6 +111,7 @@ static void route(Client *c,PadSession *session) {
     if(strcmp(method,"POST")||!authorized_header(c->input)) {
         respond(c,403,"text/plain","Forbidden"); return;
     }
+    c->keep_alive=!strcmp(version,"HTTP/1.1") && reusable_request(c);
     int result=pad_request(session,path,platform_ms());
     if(result==200 && !platform_apply(&session->state)) result=503;
     respond(c,result,"text/plain",result==200?"OK":"Controller unavailable or request rejected");
@@ -97,6 +126,7 @@ int phonepad_run(PadSession *session,unsigned port) {
     addr.sin_addr.s_addr=htonl(INADDR_ANY);
     if(bind(listener,(struct sockaddr*)&addr,sizeof(addr))||listen(listener,8)) { CLOSE(listener); return 3; }
     nonblock(listener);
+    platform_listening();
     Client clients[8]={0}; for(int i=0;i<8;i++) clients[i].fd=INVALID;
     while(platform_running()) {
         uint64_t now=platform_ms();
@@ -105,7 +135,7 @@ int phonepad_run(PadSession *session,unsigned port) {
         fd_set reads,writes; FD_ZERO(&reads); FD_ZERO(&writes); FD_SET(listener,&reads);
         Socket maxfd=listener;
         for(int i=0;i<8;i++) if(clients[i].fd!=INVALID) {
-            if(now-clients[i].started>(clients[i].draining?100u:1000u)) { CLOSE(clients[i].fd); clients[i].fd=INVALID; continue; }
+            if(now-clients[i].started>(clients[i].draining?100u:5000u)) { CLOSE(clients[i].fd); clients[i].fd=INVALID; continue; }
             if(clients[i].writing) FD_SET(clients[i].fd,&writes); else FD_SET(clients[i].fd,&reads);
             if(clients[i].fd>maxfd) maxfd=clients[i].fd;
         }
@@ -147,6 +177,11 @@ int phonepad_run(PadSession *session,unsigned port) {
                 if(n>0) c->sent+=(size_t)n;
                 if(n<=0) { CLOSE(c->fd); c->fd=INVALID; }
                 else if(c->sent==c->hlen+c->plen) {
+                    if (c->keep_alive) {
+                        Socket fd=c->fd;
+                        *c=(Client){.fd=fd,.started=platform_ms()};
+                        continue;
+                    }
                     // Half-close and drain unread request data. Closing immediately with
                     // an oversized request still queued can reset TCP and truncate the reply.
 #ifdef _WIN32

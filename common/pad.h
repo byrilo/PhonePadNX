@@ -18,3 +18,5 @@ uint64_t platform_ms(void);
 bool platform_apply(const PhonePadState *state);
 void platform_tick(void);
 bool platform_running(void);
+
+void platform_listening(void);

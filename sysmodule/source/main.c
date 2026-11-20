@@ -47,6 +47,8 @@ static void status(Result rc) {
     FILE *f=fopen("sdmc:/config/phonepad/status.txt","w");
     if(f) { fprintf(f,"%s\n8080\n%08X\n",session.pin,rc); fclose(f); }
 }
+void platform_listening(void) { status(0); }
+
 bool platform_apply(const PhonePadState *s) {
     Result rc=0;
     if(!dbg_ready) { rc=hiddbgInitialize(); if(R_FAILED(rc)) goto done; dbg_ready=true; }
@@ -106,7 +108,7 @@ int main(void) {
     Result rc;
 
     unlink("sdmc:/config/phonepad/start");
-    status(0);
+    status(0xf0000010);
     for (;;) {
         if (unlink("sdmc:/config/phonepad/start")==0) {
             unlink("sdmc:/config/phonepad/stop");
@@ -114,7 +116,7 @@ int main(void) {
             deadline=platform_ms()+30*60*1000;
             rc=socketInitialize(&config);
             if (R_FAILED(rc)) { status(rc); continue; }
-            status(0);
+            status(0xf0000011);
             next_stop_check=0;
             listening=true;
             int err=phonepad_run(&session,8080);
@@ -122,7 +124,7 @@ int main(void) {
             socketExit();
             pad_init(&session,pin);
             platform_tick();
-            status(err ? 0xf0000000u+(unsigned)err : 0);
+            status(err ? 0xf0000000u+(unsigned)err : 0xf0000010);
         }
         svcSleepThread(100000000);
     }

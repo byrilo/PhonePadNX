@@ -22,3 +22,5 @@ int main(void) {
     puts("SIMULATOR ONLY: http://127.0.0.1:8080/?pin=123456 (no Switch input)");
     return phonepad_run(&session,8080);
 }
+
+void platform_listening(void) {}

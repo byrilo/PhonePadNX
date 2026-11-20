@@ -11,11 +11,11 @@ sha = os.environ['GITHUB_SHA']
 token = os.environ['GH_TOKEN']
 headers = {'Authorization': 'Bearer '+token, 'Accept': 'application/vnd.github+json', 'User-Agent': 'PhonePadNX-release', 'X-GitHub-Api-Version': '2022-11-28'}
 base = 'https://api.github.com/repos/'+repo
-asset = Path('dist/PhonePadNX-0.3.0-test.zip')
+asset = Path('dist/PhonePadNX-0.3.2-test.zip')
 body = """Тестовая сборка с управлением в играх. На Switch пока не проверена. Инструкция по запуску и отключению находится в ZIP.
 """
 
-payload = {'tag_name':'v0.3.0-test', 'target_commitish':sha, 'name':'0.3.0 — игровой тест', 'body':body, 'draft':False, 'prerelease':True, 'generate_release_notes':False}
+payload = {'tag_name':'v0.3.2-test', 'target_commitish':sha, 'name':'0.3.2 — игровой тест', 'body':body, 'draft':False, 'prerelease':True, 'generate_release_notes':False}
 request = urllib.request.Request(base+'/releases', data=json.dumps(payload).encode(), headers={**headers,'Content-Type':'application/json'}, method='POST')
 with urllib.request.urlopen(request, timeout=30) as response:
     release=json.load(response)

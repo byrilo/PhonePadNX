@@ -3,9 +3,11 @@
 #include <arpa/inet.h>
 #include "qrcodegen.h"
 
-static void signal_module(const char *path) {
+static bool signal_module(const char *path) {
     FILE *file=fopen(path,"w");
-    if (file) { fputs("1",file); fclose(file); }
+    if (!file) return false;
+    bool wrote=fputs("1",file)>=0;
+    return fclose(file)==0 && wrote;
 }
 static void draw_qr(const char *url) {
     uint8_t temp[qrcodegen_BUFFER_LEN_FOR_VERSION(4)],qr[qrcodegen_BUFFER_LEN_FOR_VERSION(4)];
@@ -22,11 +24,12 @@ int main(void) {
     padConfigureInput(1,HidNpadStyleSet_NpadStandard);
     PadState pad; padInitializeDefault(&pad);
     Result network=nifmInitialize(NifmServiceType_User);
+    const char *command="";
     while (appletMainLoop()) {
         padUpdate(&pad);
         u64 buttons=padGetButtonsDown(&pad);
         if (buttons & HidNpadButton_Plus) break;
-        if (buttons & HidNpadButton_A) signal_module("sdmc:/config/phonepad/start");
+        if (buttons & HidNpadButton_A) command=signal_module("sdmc:/config/phonepad/start")?"Start requested":"Cannot write start flag";
         if (buttons & HidNpadButton_X) signal_module("sdmc:/config/phonepad/stop");
         char pin[7]={0};
         unsigned port=8080,result=0;
@@ -40,12 +43,14 @@ int main(void) {
         struct in_addr address={.s_addr=ip};
         char url[128];
         snprintf(url,sizeof(url),"http://%s:%u/?pin=%s",inet_ntoa(address),port,pin);
-        printf("\x1b[2J\x1b[1;2HPhonePadNX 0.3.0 test");
-        if (ip && pin[0]) {
+        printf("\x1b[2J\x1b[1;2HPhonePadNX 0.3.2 test");
+        if (ip && pin[0] && result==0) {
             printf("\x1b[2;2H%s",url);
             draw_qr(url);
         }
         printf("\x1b[6;2HBackend: %08X",result);
+        printf("\x1b[7;2H%s",command);
+        printf("\x1b[8;2H%s",!pin[0]?"No module status":result==0?"Server listening":result==0xf0000010?"Server idle":result==0xf0000011?"Starting server":"Server/controller error");
         printf("\x1b[9;2HA  Start server (30 minutes)");
         printf("\x1b[11;2HX  Stop server");
         printf("\x1b[13;2H+  Exit to launch a game");

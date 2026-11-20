@@ -28,7 +28,7 @@ function offline(message){connected=false;clear();$('setup').hidden=false;$('mes
 async function request(path){
  const abort=new AbortController();controller=abort;
  const timer=setTimeout(()=>abort.abort(),1500);
- try{const r=await fetch(path,{method:'POST',headers:{'X-PhonePad':'1'},signal:abort.signal,cache:'no-store'});const body=await r.text();return {ok:r.ok,status:r.status,body};}
+ try{const r=await fetch(path,{method:'POST',headers:{'X-PhonePad':'1','X-PhonePad-Keepalive':'1'},signal:abort.signal,cache:'no-store'});const body=await r.text();return {ok:r.ok,status:r.status,body};}
  finally{clearTimeout(timer);if(controller===abort)controller=null;}
 }
 function failure(r){return r.status===409?'Контроллер занят или пакет устарел.':r.status===403?'Неверный PIN или сессия завершилась.':r.status===429?'Подожди секунду и повтори.':r.status===503?'Ошибка обработки ввода на Switch.':`Switch ответил HTTP ${r.status}.`;}

@@ -48,6 +48,18 @@ try:
     for sequence in range(2,82):
         assert call(f'/api/state?id={owner}&seq={sequence}&b=0&lx=0&ly=0&rx=0&ry=0')[0] == 200
         time.sleep(.025)
+    persistent = http.client.HTTPConnection('127.0.0.1', 8080, timeout=2)
+    connected_socket = None
+    for sequence in range(82, 342):
+        persistent.request('POST', f'/api/state?id={owner}&seq={sequence}&b=0&lx=0&ly=0&rx=0&ry=0',
+                           headers={'X-PhonePad':'1', 'X-PhonePad-Keepalive':'1'})
+        reply = persistent.getresponse()
+        assert reply.status == 200 and reply.read() == b'OK'
+        if connected_socket is None:
+            connected_socket = persistent.sock
+        assert connected_socket is not None and persistent.sock is connected_socket
+        time.sleep(.01)
+    persistent.close()
     assert call('/'*2100,'GET')[0] == 413
     print('HTTP integration passed: page, auth, ownership, input, replay, slow client, watchdog, oversized request.')
 finally:

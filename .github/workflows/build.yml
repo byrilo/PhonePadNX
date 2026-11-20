@@ -31,7 +31,7 @@ jobs:
       - uses: actions/upload-artifact@v4
         with:
           name: PhonePadNX-test
-          path: dist/PhonePadNX-0.3.0-test.zip
+          path: dist/PhonePadNX-0.3.2-test.zip
       - name: Publish test release
         if: contains(github.event.head_commit.message, '[release]')
         env:
