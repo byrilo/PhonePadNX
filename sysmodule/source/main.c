@@ -67,7 +67,8 @@ bool platform_apply(const PhonePadState *s) {
         attached=true;
     }
     HiddbgHdlsState state={0};
-    state.battery_level=4; state.flags=1; state.buttons=s->buttons;
+    state.battery_level=4; state.flags=1; state.buttons=s->buttons & 0xffffu;
+    if (s->buttons & PHONEPAD_HOME) state.buttons |= HiddbgNpadButton_Home;
     state.analog_stick_l=(HidAnalogStickState){s->lx,s->ly};
     state.analog_stick_r=(HidAnalogStickState){s->rx,s->ry};
     rc=hiddbgSetHdlsState(handle,&state);

@@ -2,7 +2,7 @@ from pathlib import Path
 import zipfile
 
 root = Path(__file__).resolve().parents[1]
-archive = root / 'dist/PhonePadNX-0.3.2-test.zip'
+archive = root / 'dist/PhonePadNX-0.3.3-test.zip'
 archive.parent.mkdir(exist_ok=True)
 module = 'atmosphere/contents/4200000000505044'
 with zipfile.ZipFile(archive, 'w', zipfile.ZIP_DEFLATED) as z:

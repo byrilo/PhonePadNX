@@ -12,8 +12,8 @@ int main(void) {
     assert(pad_request(&s,"/api/claim?id=" ID "&pin=000000",1000)==403);
     assert(pad_request(&s,"/api/claim?id=" ID "&pin=123456",1100)==429);
     assert(pad_request(&s,"/api/claim?id=" ID "&pin=123456",1400)==200);
-    snprintf(path,sizeof(path),STATE,1u,65535u,32767);
-    assert(pad_request(&s,path,1410)==200 && s.state.lx==32767 && s.state.buttons==65535);
+    snprintf(path,sizeof(path),STATE,1u,65535u|PHONEPAD_HOME,32767);
+    assert(pad_request(&s,path,1410)==200 && s.state.lx==32767 && s.state.buttons==(65535u|PHONEPAD_HOME));
     assert(pad_request(&s,path,1420)==409); // replay
     snprintf(path,sizeof(path),STATE,0u,1u,0); assert(pad_request(&s,path,1430)==409);
     snprintf(path,sizeof(path),STATE,2u,1u,32768); assert(pad_request(&s,path,1440)==400);

@@ -54,9 +54,10 @@ int pad_request(PadSession *s,const char *path,uint64_t now) {
     if(strncmp(path,"/api/state?",11)) return 404;
     if(!s->owner[0]||strcmp(s->owner,id)) return 403;
     long long b,lx,ly,rx,ry,seq;
-    if(!number(path,"b",0,0xffff,&b)||!number(path,"lx",-32767,32767,&lx)||
+    if(!number(path,"b",0,0xffffu|PHONEPAD_HOME,&b)||!number(path,"lx",-32767,32767,&lx)||
        !number(path,"ly",-32767,32767,&ly)||!number(path,"rx",-32767,32767,&rx)||
        !number(path,"ry",-32767,32767,&ry)||!number(path,"seq",0,UINT32_MAX,&seq)) return 400;
+    if ((uint32_t)b & ~(0xffffu|PHONEPAD_HOME)) return 400;
     // Reject replayed/reordered states, while allowing the sequence counter to wrap.
     uint32_t delta=(uint32_t)seq-s->sequence;
     if(s->has_sequence && (delta==0||delta>=0x80000000u)) return 409;

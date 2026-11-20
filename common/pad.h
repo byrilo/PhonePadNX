@@ -2,6 +2,8 @@
 #include <stdbool.h>
 #include <stdint.h>
 #include <stddef.h>
+#define PHONEPAD_HOME (1u << 18)
+
 typedef struct { uint32_t buttons; int lx,ly,rx,ry; } PhonePadState;
 typedef struct {
     char pin[7], owner[33];
